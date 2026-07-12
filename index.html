@@ -443,15 +443,21 @@ function renderFunnel(containerId, videoImpressions, video){
     el.innerHTML = '<div class="funnel-empty">Sem anúncios em vídeo neste recorte (só imagem).</div>';
     return;
   }
-  const widthBase = video.v15 || 1;   // a barra de 15seg sempre aparece cheia
+  // Base da largura das barras: só as etapas em % (25→100), que são sempre decrescentes
+  // (quem viu 50% obrigatoriamente passou pelos 25%). "15 segundos" é um corte por tempo
+  // absoluto — não por proporção do vídeo — então é só informativo, sem entrar nessa conta.
+  const widthBase = Math.max(video.v25||0, video.v50||0, video.v75||0, video.v95||0, video.v100||0, 1);
   const pctBase = videoImpressions || 1; // % exibido é sempre real, em cima das impressões
   el.innerHTML = FUNNEL_STAGES.map((s)=>{
     const val = video[s.k]||0;
-    const widthPct = Math.max(2, (val/widthBase*100));
+    const isInfo = s.k==='v15';
+    const widthPct = isInfo ? Math.min(100, Math.max(2, val/widthBase*100)) : Math.max(2, (val/widthBase*100));
     const retPct = val/pctBase*100;
+    const lbl = isInfo ? `${s.lbl} <span style="color:var(--muted2);font-weight:400">· informativo</span>` : s.lbl;
+    const barColor = isInfo ? 'var(--muted2)' : COR_ACENTO;
     return `<div class="f-row">
-      <div class="f-lbl">${s.lbl}</div>
-      <div class="f-bar-track"><div class="f-bar-fill" style="width:${widthPct}%;background:${COR_ACENTO}"></div></div>
+      <div class="f-lbl">${lbl}</div>
+      <div class="f-bar-track"><div class="f-bar-fill" style="width:${widthPct}%;background:${barColor}"></div></div>
       <div class="f-val">${fN(val)}</div>
       <div class="f-pct">${retPct.toFixed(1)}%</div>
     </div>`;
