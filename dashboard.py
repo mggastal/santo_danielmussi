@@ -11,7 +11,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════
 # CONFIG DO CLIENTE — edite apenas esta seção
 # ══════════════════════════════════════════════════════
-SHEET_ID       = "COLE_AQUI_O_ID_DA_PLANILHA"
+SHEET_ID       = "1enwKvr8k_kIUQslpGeBGPODksGka_E2_UKL2jWUBvS4"
 TEMPLATE_FILE  = "dashboard.html"
 OUTPUT_FILE    = "index.html"
 
