@@ -37,7 +37,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 /* TOPBAR */
 .topbar{position:sticky;top:0;z-index:500;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;box-shadow:0 2px 10px rgba(0,0,0,.08);}
-.topbar-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;max-width:1240px;margin-left:auto;margin-right:auto;}
+.brand-row{max-width:1240px;margin:0 auto 10px;}
 .brand{display:flex;align-items:center;gap:10px;min-width:0;}
 .logo-box{width:34px;height:34px;border-radius:9px;background:var(--kc,var(--accent));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;}
 .logo-img{height:34px;width:auto;max-width:136px;object-fit:contain;object-position:left center;flex-shrink:0;display:none;}
@@ -45,19 +45,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .brand-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .brand-sub{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
 .theme-btn{height:26px;padding:0 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;white-space:nowrap;}
-.topbar-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .action-buttons{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.updated-row{max-width:1240px;margin:6px auto 0;text-align:right;}
 .updated-lbl{font-size:10px;color:var(--muted2);white-space:nowrap;}
-@media(max-width:520px){
-  .topbar-actions{flex-direction:column-reverse;align-items:flex-end;gap:4px;}
-}
 .bars-row{display:flex;gap:6px;flex-wrap:wrap;max-width:1240px;margin:0 auto;}
-.period-bar,.view-bar{display:flex;gap:2px;background:var(--bg);padding:2px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;}
+.period-bar{display:flex;gap:2px;background:var(--bg);padding:2px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;}
 .period-bar{flex:2;min-width:180px;}
-.view-bar{flex:1;min-width:140px;}
+.view-row{display:flex;align-items:center;gap:8px;flex:1;min-width:220px;flex-wrap:wrap;}
+.view-bar{display:flex;gap:2px;background:var(--bg);padding:2px;border-radius:8px;border:1px solid var(--border);overflow-x:auto;flex:1;min-width:140px;}
 @media(max-width:640px){
   .bars-row{flex-direction:column;}
-  .period-bar,.view-bar{width:100%;min-width:0;}
+  .period-bar,.view-row{width:100%;min-width:0;}
 }
 .pb,.vb{flex:1;padding:5px 8px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;font-family:'DM Sans',sans-serif;}
 .pb.active{background:var(--surface);color:var(--accent);box-shadow:var(--sh);}
@@ -195,20 +193,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 </head>
 <body>
 <div class="topbar">
-  <div class="topbar-row">
+  <div class="brand-row">
     <div class="brand">
       <img class="logo-img" id="logoImg" src="" alt="">
       <div class="logo-box" id="logoBox">CAND</div>
       <div class="brand-txt">
         <div class="brand-name" id="brandName">Candidato</div>
         <div class="brand-sub">Relatório de Tráfego</div>
-      </div>
-    </div>
-    <div class="topbar-actions">
-      <div class="updated-lbl" id="updatedLbl"></div>
-      <div class="action-buttons">
-        <div class="label-toggle on" id="labelToggle" onclick="toggleLabels(this)" title="Rótulos de dados">Rótulos</div>
-        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">Escuro</button>
       </div>
     </div>
   </div>
@@ -219,10 +210,19 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
       <button class="pb" data-p="30">30 dias</button>
       <button class="pb active" data-p="all">Tudo</button>
     </div>
-    <div class="view-bar" id="viewBar">
-      <button class="vb active" data-v="alcance">Alcance</button>
-      <button class="vb" data-v="engajamento">Engajamento</button>
+    <div class="view-row">
+      <div class="view-bar" id="viewBar">
+        <button class="vb active" data-v="alcance">Alcance</button>
+        <button class="vb" data-v="engajamento">Engajamento</button>
+      </div>
+      <div class="action-buttons">
+        <div class="label-toggle on" id="labelToggle" onclick="toggleLabels(this)" title="Rótulos de dados">Rótulos</div>
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">Escuro</button>
+      </div>
     </div>
+  </div>
+  <div class="updated-row">
+    <div class="updated-lbl" id="updatedLbl"></div>
   </div>
 </div>
 
