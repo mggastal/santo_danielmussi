@@ -356,10 +356,15 @@ if(AGENCY_LOGO_URL){
   agLogo.src = AGENCY_LOGO_URL;
 }
 document.documentElement.style.setProperty('--accent', COR_ACENTO);
-if(DATA_GERACAO){
-  const d = new Date(DATA_GERACAO+'T12:00:00');
-  document.getElementById('updatedLbl').innerHTML = 'Atualizado em '+d.toLocaleDateString('pt-BR')+' <span class="status-dot active" style="margin:0 0 0 3px"></span>';
-}
+const ultimaData = RAW.reduce((max, r) => {
+  const dt = parseBR(r.d);
+  return dt > max ? dt : max;
+}, new Date(0));
+
+document.getElementById('updatedLbl').innerHTML =
+  'Dados até o dia: ' +
+  ultimaData.toLocaleDateString('pt-BR') +
+  ' <span class="status-dot active" style="margin:0 0 0 3px"></span>';
 
 function toggleTheme(){
   const html = document.documentElement;
