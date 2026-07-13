@@ -254,7 +254,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <div class="table-scroll">
       <table class="camp-table">
         <thead><tr>
-          <th>Campanha</th><th>Invest.</th><th>Impr.</th><th>Alcance</th><th>CTR Total</th><th>CPM</th><th>Engaj.</th><th>CPE</th><th></th>
+          <th>Campanha</th><th>Invest.</th><th>Impr.</th><th>Alcance</th><th>CTR Total</th><th>CPM</th><th>Engaj.</th><th>CPE</th><th>Visita Perfil</th><th>CPV</th><th></th>
         </tr></thead>
         <tbody id="treeBody"></tbody>
         <tfoot id="treeFoot"></tfoot>
@@ -543,11 +543,11 @@ function renderChart(){
 
 // ══ ÁRVORE CAMPANHA → CONJUNTO → CRIATIVO ═════════════════
 function emptyNode(name){
-  return {name, status:'', statusDate:new Date(0), sp:0, imp:0, rch:0, rc:0, sh:0, cm:0, sv:0, cl:0,
+  return {name, status:'', statusDate:new Date(0), sp:0, imp:0, rch:0, rc:0, sh:0, cm:0, sv:0, cl:0, pv:0,
            v15:0,v25:0,v50:0,v75:0,v95:0,v100:0,tp:0, thumb:'', children:{}};
 }
 function addRow(node, r){
-  node.sp+=r.sp; node.imp+=r.imp; node.rch+=r.rch; node.rc+=r.rc; node.sh+=r.sh; node.cm+=r.cm; node.sv+=r.sv; node.cl+=(r.cl||0);
+  node.sp+=r.sp; node.imp+=r.imp; node.rch+=r.rch; node.rc+=r.rc; node.sh+=r.sh; node.cm+=r.cm; node.sv+=r.sv; node.cl+=(r.cl||0); node.pv+=(r.pv||0);
   node.v15+=r.v15; node.v25+=r.v25; node.v50+=r.v50; node.v75+=r.v75; node.v95+=r.v95; node.v100+=r.v100; node.tp+=r.tp;
   const dt = parseBR(r.d);
   if(dt>=node.statusDate){ node.status=r.st; node.statusDate=dt; }
@@ -591,10 +591,12 @@ function statusDotHtml(s){
 function ctrTotal(n){ return n.imp>0 ? (n.cl/n.imp*100) : null; }
 function cpmOf(n){ return n.imp>0 ? n.sp/n.imp*1000 : null; }
 function cpeOf(n){ return eng(n)>0 ? n.sp/eng(n) : null; }
+function cpvOf(n){ return n.pv>0 ? n.sp/n.pv : null; }
 
 function rowCells(node){
   return `<td>${fD(node.sp)}</td><td>${fN(node.imp)}</td><td>${fN(node.rch)}</td>
-    <td>${fP(ctrTotal(node))}</td><td>${fD(cpmOf(node))}</td><td>${fN(eng(node))}</td><td>${fD(cpeOf(node))}</td>`;
+    <td>${fP(ctrTotal(node))}</td><td>${fD(cpmOf(node))}</td><td>${fN(eng(node))}</td><td>${fD(cpeOf(node))}</td>
+    <td>${fN(node.pv)}</td><td>${fD(cpvOf(node))}</td>`;
 }
 function funnelBtn(cKey, aKey, crKey){
   const args = [cKey, aKey||'', crKey||''].map(v=>`'${v}'`).join(',');
@@ -633,7 +635,7 @@ function renderTree(){
   const body = document.getElementById('treeBody');
   const foot = document.getElementById('treeFoot');
   if(!camps.length){
-    body.innerHTML = '<tr><td colspan="9" style="color:var(--muted);font-size:12px">Sem dados no período.</td></tr>';
+    body.innerHTML = '<tr><td colspan="11" style="color:var(--muted);font-size:12px">Sem dados no período.</td></tr>';
     foot.innerHTML = '';
     return;
   }
@@ -641,7 +643,7 @@ function renderTree(){
   let html = '';
   camps.forEach((camp,ci)=>{
     const cKey = 'c'+ci;
-    totals.sp+=camp.sp; totals.imp+=camp.imp; totals.rch+=camp.rch; totals.cl+=camp.cl;
+    totals.sp+=camp.sp; totals.imp+=camp.imp; totals.rch+=camp.rch; totals.cl+=camp.cl; totals.pv+=camp.pv;
     totals.rc+=camp.rc; totals.sh+=camp.sh; totals.cm+=camp.cm; totals.sv+=camp.sv;
     html += campRowHtml(camp, cKey);
     if(openTree[cKey]){
@@ -705,12 +707,9 @@ function openNodeModal(cKey, aKey, crKey){
   if(node.thumb){ thumbImg.src = node.thumb; thumbImg.style.display='block'; thumbPh.style.display='none'; }
   else { thumbImg.style.display='none'; thumbPh.style.display='flex'; thumbPh.textContent = '🖼'; }
 
-  const engV = eng(node);
-  document.getElementById('modalKpis').innerHTML = `
-    <div class="mk-item"><div class="mk-lbl">Alcance</div><div class="mk-val">${fN(node.rch)}</div></div>
-    <div class="mk-item"><div class="mk-lbl">Engajamento</div><div class="mk-val">${fN(engV)}</div></div>
-    <div class="mk-item"><div class="mk-lbl">Investimento</div><div class="mk-val" style="font-size:13px">${fD(node.sp)}</div></div>
-    <div class="mk-item"><div class="mk-lbl">CPM</div><div class="mk-val" style="font-size:13px">${fD(node.imp>0?node.sp/node.imp*1000:null)}</div></div>`;
+  document.getElementById('modalKpis').innerHTML = creativeMetrics(node).map(m=>
+    `<div class="mk-item"><div class="mk-lbl">${m.lbl}</div><div class="mk-val" style="font-size:13px">${m.val}</div></div>`
+  ).join('');
 
   document.getElementById('modalFunnelSub').textContent = node.vidImp
     ? `${fN(node.vidImp)} impressões em vídeo — base para os % abaixo`
@@ -802,6 +801,18 @@ function renderSegmentacao(){
   renderSegBlock('chSegPlatform','tPlatform', platAgg);
 }
 
+function creativeMetrics(cr){
+  return [
+    {lbl:'Investimento', val:fD(cr.sp)},
+    {lbl:'Alcance', val:fN(cr.rch)},
+    {lbl:'CPM', val:fD(cpmOf(cr))},
+    {lbl:'CTR', val:fP(ctrTotal(cr))},
+    {lbl:'Engajamento', val:fN(eng(cr))},
+    {lbl:'CPE', val:fD(cpeOf(cr))},
+    {lbl:'Visita ao perfil', val:fN(cr.pv)},
+    {lbl:'CPV', val:fD(cpvOf(cr))},
+  ];
+}
 function flattenCreatives(tree){
   const out = [];
   const camps = sortedValues(tree);
@@ -833,10 +844,7 @@ function renderCreativeGrid(){
         <div class="ad-name">${statusDotHtml(cr.status)}${cr.name}</div>
         <div class="ad-camp" title="${cr.campName}">${cr.campName}</div>
         <div class="ad-stats-grid">
-          <div><div class="ad-stat-lbl">Alcance</div><div class="ad-stat-val">${fN(cr.rch)}</div></div>
-          <div><div class="ad-stat-lbl">Engaj.</div><div class="ad-stat-val">${fN(eng(cr))}</div></div>
-          <div><div class="ad-stat-lbl">Invest.</div><div class="ad-stat-val">${fD(cr.sp)}</div></div>
-          <div><div class="ad-stat-lbl">CPM</div><div class="ad-stat-val">${fD(cpmOf(cr))}</div></div>
+          ${creativeMetrics(cr).map(m=>`<div><div class="ad-stat-lbl">${m.lbl}</div><div class="ad-stat-val">${m.val}</div></div>`).join('')}
         </div>
       </div>
     </div>`;
