@@ -11,7 +11,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════
 # CONFIG DO CLIENTE — edite apenas esta seção
 # ══════════════════════════════════════════════════════
-SHEET_ID       = "1enwKvr8k_kIUQslpGeBGPODksGka_E2_UKL2jWUBvS4"
+SHEET_ID       = "COLE_AQUI_O_ID_DA_PLANILHA"
 TEMPLATE_FILE  = "dashboard.html"
 OUTPUT_FILE    = "index.html"
 
@@ -70,33 +70,51 @@ VIDEO_COLS = {
     "Video Thruplay Watched Actions": "thruplay",
 }
 
+import re as _re
+
+def _sum_dupe_cols(raw, label):
+    """Soma TODAS as colunas com esse nome. Se a planilha tiver a mesma coluna
+    duplicada (ex: 'Video 25 Percent Watched Actions' 2x), o pandas já
+    renomeia a segunda para 'Video 25 Percent Watched Actions.1' ao ler o CSV
+    — sem tratar isso, um rename() simples ignora essa segunda coluna e
+    subconta o total. Aqui pegamos o nome exato e também as variantes .1/.2/…"""
+    pattern = _re.compile(rf"^{_re.escape(label)}(\.\d+)?$")
+    cols = [c for c in raw.columns if pattern.match(c)]
+    if len(cols) > 1:
+        print(f"  ⚠ AVISO: coluna '{label}' aparece {len(cols)}x na planilha — somando todas para não subcontar.")
+    if not cols:
+        return pd.Series(0, index=raw.index)
+    return sum(to_num(raw[c]) for c in cols)
+
 def load_meta():
     print("  Lendo meta-ads...")
-    df = pd.read_csv(URL_META)
-    df = df.rename(columns={
-        "Date": "date", "Campaign Name": "campaign", "Adset Name": "adset",
-        "Ad Name": "ad", "Thumbnail URL": "thumb", "Status": "status",
-        "Spend (Cost, Amount Spent)": "spend", "Impressions": "impressions",
-        "Reach (Estimated)": "reach",
-        "Action Post Reactions": "reactions",
-        "Action Post Shares": "shares",
-        "Action Post Comments": "comments",
-        "Action Post Save (Onsite Conversion)": "saves",
-        "Instagram Profile Visits": "profile_visits",
-        "Clicks": "clicks",
-        **VIDEO_COLS,
-    })
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    if "status" not in df.columns: df["status"] = ""
-    df["status"] = df["status"].astype(str).str.strip().str.upper()
-    for c in ["spend", "impressions", "reach", "reactions", "shares", "comments", "saves", "profile_visits", "clicks",
-              "v15", "v25", "v50", "v75", "v95", "v100", "thruplay"]:
-        if c in df.columns: df[c] = to_num(df[c])
-        else: df[c] = 0
+    raw = pd.read_csv(URL_META)
+
+    df = pd.DataFrame(index=raw.index)
+    df["date"] = pd.to_datetime(raw["Date"], errors="coerce") if "Date" in raw.columns else pd.NaT
+    df["campaign"] = raw["Campaign Name"] if "Campaign Name" in raw.columns else ""
+    df["adset"] = raw["Adset Name"] if "Adset Name" in raw.columns else ""
+    df["ad"] = raw["Ad Name"] if "Ad Name" in raw.columns else ""
+    df["thumb"] = raw["Thumbnail URL"] if "Thumbnail URL" in raw.columns else ""
+    df["status"] = (raw["Status"] if "Status" in raw.columns else "").astype(str).str.strip().str.upper()
+
+    field_map = {
+        "spend": "Spend (Cost, Amount Spent)", "impressions": "Impressions",
+        "reach": "Reach (Estimated)", "reactions": "Action Post Reactions",
+        "shares": "Action Post Shares", "comments": "Action Post Comments",
+        "saves": "Action Post Save (Onsite Conversion)", "profile_visits": "Instagram Profile Visits",
+        "clicks": "Clicks",
+    }
+    field_map.update({v: k for k, v in VIDEO_COLS.items()})
+    for field, label in field_map.items():
+        df[field] = _sum_dupe_cols(raw, label)
+
     df["engajamento"] = df["reactions"] + df["shares"] + df["comments"] + df["saves"]
     df = df.dropna(subset=["date"])
     print(f"     {len(df)} linhas | {df['date'].min().date()} → {df['date'].max().date()}")
     print(f"     Alcance total: {df['reach'].sum():.0f} | Engajamento total: {df['engajamento'].sum():.0f}")
+    print(f"     Vídeo — 15s: {df['v15'].sum():.0f} | 25%: {df['v25'].sum():.0f} | 50%: {df['v50'].sum():.0f} | "
+          f"75%: {df['v75'].sum():.0f} | 95%: {df['v95'].sum():.0f} | 100%: {df['v100'].sum():.0f}")
     return df
 
 def calc_kpis(p):
