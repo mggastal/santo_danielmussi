@@ -120,7 +120,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 @media(min-width:620px){.ad-grid{grid-template-columns:repeat(3,1fr);}}
 @media(min-width:900px){.ad-grid{grid-template-columns:repeat(4,1fr);}}
 @media(min-width:1140px){.ad-grid{grid-template-columns:repeat(5,1fr);}}
-.ad-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.ad-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;}
 .ad-img{width:100%;aspect-ratio:4/5;background:var(--border);overflow:hidden;}
 .ad-img img{width:100%;height:100%;object-fit:cover;display:block;}
 .ad-img-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--muted2);}
@@ -788,10 +788,16 @@ function renderSegmentacao(){
 
 function flattenCreatives(tree){
   const out = [];
-  Object.values(tree).forEach(camp=>{
-    Object.values(camp.children).forEach(adset=>{
-      Object.values(adset.children).forEach(cr=>{
-        out.push({...cr, campName:camp.name});
+  const camps = sortedValues(tree);
+  camps.forEach((camp,ci)=>{
+    const cKey = 'c'+ci;
+    const adsets = sortedValues(camp.children);
+    adsets.forEach((adset,ai)=>{
+      const aKey = cKey+'_a'+ai;
+      const creatives = sortedValues(adset.children);
+      creatives.forEach((cr,cri)=>{
+        const crKey = aKey+'_cr'+cri;
+        out.push({...cr, campName:camp.name, cKey, aKey, crKey});
       });
     });
   });
@@ -805,7 +811,7 @@ function renderCreativeGrid(){
   if(!creatives.length){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:10px 0">Sem criativos no período.</div>'; return; }
   el.innerHTML = creatives.map(cr=>{
     const thumbHtml = cr.thumb ? `<img src="${cr.thumb}" loading="lazy" alt="">` : `<div class="ad-img-ph">🖼</div>`;
-    return `<div class="ad-card">
+    return `<div class="ad-card" onclick="openNodeModal('${cr.cKey}','${cr.aKey}','${cr.crKey}')">
       <div class="ad-img">${thumbHtml}</div>
       <div class="ad-info">
         <div class="ad-name">${statusDotHtml(cr.status)}${cr.name}</div>
