@@ -250,7 +250,7 @@ def build_raw(df, img_dir):
     agg = df.groupby(["date", "campaign", "adset", "ad"]).agg(
         spend=("spend", "sum"), impressions=("impressions", "sum"), reach=("reach", "sum"),
         reactions=("reactions", "sum"), shares=("shares", "sum"), comments=("comments", "sum"),
-        saves=("saves", "sum"), clicks=("clicks", "sum"),
+        saves=("saves", "sum"), clicks=("clicks", "sum"), profile_visits=("profile_visits", "sum"),
         v15=("v15", "sum"), v25=("v25", "sum"), v50=("v50", "sum"),
         v75=("v75", "sum"), v95=("v95", "sum"), v100=("v100", "sum"), thruplay=("thruplay", "sum"),
         status=("status", "last"),
@@ -263,6 +263,7 @@ def build_raw(df, img_dir):
             "ad": str(r["ad"]), "th": thumb_map.get(k, ""), "st": str(r["status"]),
             "sp": round(float(r["spend"]), 2), "imp": int(r["impressions"]), "rch": int(r["reach"]),
             "rc": int(r["reactions"]), "sh": int(r["shares"]), "cm": int(r["comments"]), "sv": int(r["saves"]),
+            "pv": int(r["profile_visits"]),
             "cl": int(r["clicks"]),
             "v15": int(r["v15"]), "v25": int(r["v25"]), "v50": int(r["v50"]),
             "v75": int(r["v75"]), "v95": int(r["v95"]), "v100": int(r["v100"]), "tp": int(r["thruplay"]),
