@@ -42,8 +42,13 @@ URL_BD_PLATFORM = sheet_url("breakdown-platform")
 def to_num(s):
     if pd.api.types.is_numeric_dtype(s): return s.fillna(0)
     clean = s.astype(str).str.strip().str.replace("R$", "", regex=False).str.strip()
-    if clean.str.contains(r"\d,\d", regex=True).any():
-        clean = clean.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    # Decimal BR: "215,12" -> remove "." (milhar) e troca "," por "." (215.12)
+    has_comma_decimal = clean.str.contains(r"\d,\d", regex=True)
+    clean = clean.where(~has_comma_decimal, clean.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
+    # Inteiro com separador de milhar em "." e SEM vírgula: "1.593" / "16.565" / "136.208" -> "1593" / "16565" / "136208"
+    # (sem isso, "1.593" era lido como o número 1,593 — praticamente zero. Foi o bug do funil de vídeo.)
+    only_thousands = clean.str.match(r"^-?\d{1,3}(\.\d{3})+$", na=False) & ~has_comma_decimal
+    clean = clean.where(~only_thousands, clean.str.replace(".", "", regex=False))
     return pd.to_numeric(clean, errors="coerce").fillna(0)
 
 def download_thumb(url, d):
