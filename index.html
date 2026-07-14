@@ -85,6 +85,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;box-shadow:var(--sh);}
 .card-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:3px;}
 .card-sub{font-size:11px;color:var(--muted);margin-bottom:14px;}
+.chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:3px;}
+.gran-bar{display:flex;gap:2px;background:var(--bg);padding:2px;border-radius:7px;border:1px solid var(--border);flex-shrink:0;}
+.gb{padding:4px 9px;border-radius:5px;border:none;background:transparent;cursor:pointer;font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap;font-family:'DM Sans',sans-serif;}
+.gb.active{background:var(--surface);color:var(--accent);box-shadow:var(--sh);}
 .chart-wrap{position:relative;height:230px;}
 @media(min-width:640px){.chart-wrap{height:280px;}}
 
@@ -205,10 +209,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </div>
   <div class="bars-row">
     <div class="period-bar" id="periodBar">
-      <button class="pb" data-p="7">7 dias</button>
+      <button class="pb active" data-p="7">7 dias</button>
       <button class="pb" data-p="14">14 dias</button>
       <button class="pb" data-p="30">30 dias</button>
-      <button class="pb active" data-p="all">Tudo</button>
+      <button class="pb" data-p="all">Tudo</button>
     </div>
     <div class="view-row">
       <div class="view-bar" id="viewBar">
@@ -231,8 +235,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   <div class="krow" id="kpiRow"></div>
 
   <div class="card">
-    <div class="card-title" id="chartTitle">Alcance &amp; Investimento por dia</div>
-    <div class="card-sub" id="chartSub">Alcance (barras) · Investimento (linha verde) · CPM (linha tracejada)</div>
+    <div class="chart-head">
+      <div>
+        <div class="card-title" id="chartTitle">Alcance &amp; Investimento por dia</div>
+        <div class="card-sub" id="chartSub">Alcance (barras) · Investimento (linha verde) · CPM (linha tracejada)</div>
+      </div>
+      <div class="gran-bar" id="granBar">
+        <button class="gb active" data-g="daily">Diário</button>
+        <button class="gb" data-g="weekly">Semanal</button>
+        <button class="gb" data-g="monthly">Mensal</button>
+      </div>
+    </div>
     <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
   </div>
 
@@ -369,7 +382,8 @@ function toggleTheme(){
   if(chartInstance){ renderChart(); renderSegmentacao(); }
 }
 
-let currentPeriod = 'all';
+let currentPeriod = '7';
+let currentGranularity = 'daily'; // 'daily' | 'weekly' | 'monthly'
 let currentView = 'alcance'; // 'alcance' | 'engajamento'
 let chartInstance = null;
 let openTree = {}; // controla quais nós da árvore estão abertos
@@ -407,14 +421,14 @@ function rawForPeriod(){
 function buildCalendarSeries(){
   let start, end;
   if(currentPeriod==='all'){
-    if(!DAILY.days.length) return {labels:[],reach:[],engajamento:[],spend:[],cpm:[],cpe:[]};
+    if(!DAILY.days.length) return {labels:[],reach:[],engajamento:[],spend:[],impressions:[]};
     start = parseBR(DAILY.days[0]);
     end = new Date(); end.setHours(0,0,0,0);
   } else {
     ({start, end} = periodBounds());
   }
   const idx = {}; DAILY.days.forEach((d,i)=>{ idx[d]=i; });
-  const labels=[], reach=[], engajamento=[], spend=[], cpm=[], cpe=[];
+  const labels=[], reach=[], engajamento=[], spend=[], impressions=[];
   for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
     const key = fmtBR(d);
     labels.push(key);
@@ -422,10 +436,51 @@ function buildCalendarSeries(){
     reach.push(i!=null ? DAILY.reach[i] : 0);
     engajamento.push(i!=null ? DAILY.engajamento[i] : 0);
     spend.push(i!=null ? DAILY.spend[i] : 0);
-    cpm.push(i!=null ? DAILY.cpm[i] : null);
-    cpe.push(i!=null ? DAILY.cpe[i] : null);
+    impressions.push(i!=null ? DAILY.impressions[i] : 0);
   }
-  return {labels, reach, engajamento, spend, cpm, cpe};
+  return {labels, reach, engajamento, spend, impressions};
+}
+
+function weekKey(d){
+  const day = d.getDay();
+  const diff = (day===0 ? -6 : 1-day); // volta pra segunda-feira daquela semana
+  const monday = new Date(d); monday.setDate(d.getDate()+diff);
+  return fmtBR(monday);
+}
+function monthKey(d){
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return meses[d.getMonth()]+'/'+d.getFullYear();
+}
+// Agrupa a série diária em semanas/meses somando os valores brutos — nunca
+// fazendo média de métricas de custo já calculadas (isso daria conta errada).
+function aggregateByGranularity(raw){
+  if(currentGranularity==='daily') return raw;
+  const buckets = {}, order = [];
+  raw.labels.forEach((lbl,i)=>{
+    const d = parseBR(lbl);
+    const key = currentGranularity==='weekly' ? weekKey(d) : monthKey(d);
+    if(!buckets[key]){ buckets[key] = {spend:0,impressions:0,reach:0,engajamento:0}; order.push(key); }
+    buckets[key].spend += raw.spend[i];
+    buckets[key].impressions += raw.impressions[i];
+    buckets[key].reach += raw.reach[i];
+    buckets[key].engajamento += raw.engajamento[i];
+  });
+  const labels=[], spend=[], impressions=[], reach=[], engajamento=[];
+  order.forEach(k=>{
+    labels.push(k); spend.push(buckets[k].spend); impressions.push(buckets[k].impressions);
+    reach.push(buckets[k].reach); engajamento.push(buckets[k].engajamento);
+  });
+  return {labels, spend, impressions, reach, engajamento};
+}
+// Calcula CPM/CPE em cima dos valores (já agregados ou não) — sempre depois
+// da soma, nunca antes, pra ficar matematicamente correto em qualquer granularidade.
+function computeCosts(s){
+  const cpm=[], cpe=[];
+  for(let i=0;i<s.labels.length;i++){
+    cpm.push(s.impressions[i]>0 ? s.spend[i]/s.impressions[i]*1000 : null);
+    cpe.push(s.engajamento[i]>0 ? s.spend[i]/s.engajamento[i] : null);
+  }
+  return {...s, cpm, cpe};
 }
 
 function renderKPIs(){
@@ -536,7 +591,7 @@ function hexToRgba(hex, alpha){
 function isDark(){ return document.documentElement.getAttribute('data-theme')==='dark'; }
 
 function renderChart(){
-  const s = buildCalendarSeries();
+  const s = computeCosts(aggregateByGranularity(buildCalendarSeries()));
   const labels = s.labels;
   const alc = currentView==='alcance';
   const barData = alc ? s.reach : s.engajamento;
@@ -545,7 +600,8 @@ function renderChart(){
   const costData = alc ? s.cpm : s.cpe;
   const costLbl = alc ? 'CPM' : 'CPE';
 
-  document.getElementById('chartTitle').textContent = barLbl+' & Investimento por dia';
+  const granLbl = currentGranularity==='daily' ? 'por dia' : currentGranularity==='weekly' ? 'por semana' : 'por mês';
+  document.getElementById('chartTitle').textContent = barLbl+' & Investimento '+granLbl;
   document.getElementById('chartSub').textContent = barLbl+' (barras) · Investimento (linha verde) · '+costLbl+' (linha tracejada)';
 
   const ctx = document.getElementById('mainChart').getContext('2d');
@@ -764,10 +820,8 @@ function destroySegChart(id){ if(segCharts[id]){ segCharts[id].destroy(); segCha
 
 function filterBDByPeriod(rows){
   if(currentPeriod==='all' || !rows.length) return rows;
-  const n = parseInt(currentPeriod,10);
-  const maxDate = rows.reduce((m,r)=>{ const t=parseBR(r.d); return t>m?t:m; }, new Date(0));
-  const minKeep = new Date(maxDate); minKeep.setDate(minKeep.getDate()-(n-1));
-  return rows.filter(r=>parseBR(r.d)>=minKeep);
+  const {start, end} = periodBounds();
+  return rows.filter(r=>{ const t = parseBR(r.d); return t>=start && t<=end; });
 }
 function aggBy(rows, keyFn){
   const map = {};
@@ -914,6 +968,14 @@ document.querySelectorAll('.vb').forEach(btn=>{
     btn.classList.add('active');
     currentView = btn.dataset.v;
     renderKPIs(); renderChart(); renderTree(); renderSegmentacao(); renderCreativeGrid();
+  });
+});
+document.querySelectorAll('.gb').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.gb').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentGranularity = btn.dataset.g;
+    renderChart();
   });
 });
 
