@@ -242,7 +242,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <div class="eng-grid" id="engGrid"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="funnelCard">
     <div class="card-title">Funil de Visualização de Vídeo</div>
     <div class="card-sub" id="funnelOverallSub">Total do período — quantas pessoas avançaram em cada etapa do vídeo</div>
     <div class="funnel" id="funnelOverall"></div>
@@ -356,15 +356,10 @@ if(AGENCY_LOGO_URL){
   agLogo.src = AGENCY_LOGO_URL;
 }
 document.documentElement.style.setProperty('--accent', COR_ACENTO);
-const ultimaData = RAW.reduce((max, r) => {
-  const dt = parseBR(r.d);
-  return dt > max ? dt : max;
-}, new Date(0));
-
-document.getElementById('updatedLbl').innerHTML =
-  'Dados até o dia: ' +
-  ultimaData.toLocaleDateString('pt-BR') +
-  ' <span class="status-dot active" style="margin:0 0 0 3px"></span>';
+if(DATA_GERACAO){
+  const d = new Date(DATA_GERACAO+'T12:00:00');
+  document.getElementById('updatedLbl').innerHTML = 'Atualizado em '+d.toLocaleDateString('pt-BR')+' <span class="status-dot active" style="margin:0 0 0 3px"></span>';
+}
 
 function toggleTheme(){
   const html = document.documentElement;
@@ -391,12 +386,46 @@ function toggleLabels(el){
 // ── Parse de datas dd/mm/yyyy vindas do Python ──
 function parseBR(d){ const [dd,mm,yy] = d.split('/'); return new Date(+yy,+mm-1,+dd); }
 
+function periodBounds(){
+  if(currentPeriod==='all') return null;
+  const n = parseInt(currentPeriod,10);
+  const end = new Date(); end.setHours(0,0,0,0);
+  const start = new Date(end); start.setDate(start.getDate()-(n-1));
+  return {start, end};
+}
+function fmtBR(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+
 function rawForPeriod(){
   if(currentPeriod==='all') return RAW;
-  const n = parseInt(currentPeriod,10);
-  const maxDate = RAW.reduce((m,r)=>{ const t=parseBR(r.d); return t>m?t:m; }, new Date(0));
-  const minKeep = new Date(maxDate); minKeep.setDate(minKeep.getDate()-(n-1));
-  return RAW.filter(r=>parseBR(r.d)>=minKeep);
+  const {start, end} = periodBounds();
+  return RAW.filter(r=>{ const t = parseBR(r.d); return t>=start && t<=end; });
+}
+
+// Monta a série diária do gráfico preenchendo com zero os dias sem nenhum
+// registro na planilha (ex: dia sem investimento) — sem isso, esses dias
+// simplesmente sumiam da contagem e o filtro de período ficava errado.
+function buildCalendarSeries(){
+  let start, end;
+  if(currentPeriod==='all'){
+    if(!DAILY.days.length) return {labels:[],reach:[],engajamento:[],spend:[],cpm:[],cpe:[]};
+    start = parseBR(DAILY.days[0]);
+    end = new Date(); end.setHours(0,0,0,0);
+  } else {
+    ({start, end} = periodBounds());
+  }
+  const idx = {}; DAILY.days.forEach((d,i)=>{ idx[d]=i; });
+  const labels=[], reach=[], engajamento=[], spend=[], cpm=[], cpe=[];
+  for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+    const key = fmtBR(d);
+    labels.push(key);
+    const i = idx[key];
+    reach.push(i!=null ? DAILY.reach[i] : 0);
+    engajamento.push(i!=null ? DAILY.engajamento[i] : 0);
+    spend.push(i!=null ? DAILY.spend[i] : 0);
+    cpm.push(i!=null ? DAILY.cpm[i] : null);
+    cpe.push(i!=null ? DAILY.cpe[i] : null);
+  }
+  return {labels, reach, engajamento, spend, cpm, cpe};
 }
 
 function renderKPIs(){
@@ -487,6 +516,12 @@ function renderFunnel(containerId, videoImpressions, video){
 
 function renderOverallFunnel(){
   const k = currentPeriod==='all' ? KPIS_ALL : (KPIS_PERIODS[currentPeriod]||KPIS_ALL);
+  const card = document.getElementById('funnelCard');
+  if(!k.video.video_impressions){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
   document.getElementById('funnelOverallSub').textContent =
     `${fN(k.video.video_impressions)} impressões em vídeo no período — base para os % abaixo`;
   renderFunnel('funnelOverall', k.video.video_impressions, k.video);
@@ -501,14 +536,13 @@ function hexToRgba(hex, alpha){
 function isDark(){ return document.documentElement.getAttribute('data-theme')==='dark'; }
 
 function renderChart(){
-  const n = currentPeriod==='all' ? DAILY.days.length : parseInt(currentPeriod,10);
-  const start = Math.max(0, DAILY.days.length - n);
-  const labels = DAILY.days.slice(start);
+  const s = buildCalendarSeries();
+  const labels = s.labels;
   const alc = currentView==='alcance';
-  const barData = alc ? DAILY.reach.slice(start) : DAILY.engajamento.slice(start);
+  const barData = alc ? s.reach : s.engajamento;
   const barLbl = alc ? 'Alcance' : 'Engajamento';
-  const spendData = DAILY.spend.slice(start);
-  const costData = (alc ? DAILY.cpm : DAILY.cpe).slice(start);
+  const spendData = s.spend;
+  const costData = alc ? s.cpm : s.cpe;
   const costLbl = alc ? 'CPM' : 'CPE';
 
   document.getElementById('chartTitle').textContent = barLbl+' & Investimento por dia';
