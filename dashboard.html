@@ -149,8 +149,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 /* Hierarquia de campanhas */
 .table-scroll{overflow-x:auto;margin:0 -16px;padding:0 16px;}
-.camp-table{width:100%;border-collapse:collapse;min-width:760px;}
+.camp-table{width:100%;border-collapse:collapse;min-width:980px;}
 .camp-table th{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted2);font-weight:700;text-align:right;padding:8px 10px;border-bottom:2px solid var(--border);white-space:nowrap;}
+.camp-table th.sortable{cursor:pointer;user-select:none;}
+.camp-table th.sortable:hover{color:var(--accent);}
 .camp-table th:first-child{text-align:left;}
 .camp-table td{font-size:12px;padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;}
 .camp-table td:first-child{text-align:left;white-space:normal;}
@@ -266,9 +268,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     <div class="card-sub">Campanha → Conjunto → Criativo. Toque em "Funil" para ver o funil de vídeo daquele nível.</div>
     <div class="table-scroll">
       <table class="camp-table">
-        <thead><tr>
-          <th>Campanha</th><th>Invest.</th><th>Impr.</th><th>Alcance</th><th>CTR Total</th><th>CPM</th><th>Engaj.</th><th>CPE</th><th>Visita Perfil</th><th>CPV</th><th></th>
-        </tr></thead>
+        <thead id="campTableHead"></thead>
         <tbody id="treeBody"></tbody>
         <tfoot id="treeFoot"></tfoot>
       </table>
@@ -638,7 +638,7 @@ function renderChart(){
 
 // ══ ÁRVORE CAMPANHA → CONJUNTO → CRIATIVO ═════════════════
 function emptyNode(name){
-  return {name, status:'', statusDate:new Date(0), sp:0, imp:0, rch:0, rc:0, sh:0, cm:0, sv:0, cl:0, pv:0,
+  return {name, status:'', statusDate:new Date(0), sp:0, imp:0, rch:0, rc:0, sh:0, cm:0, sv:0, cl:0, pv:0, vidImp:0,
            v15:0,v25:0,v50:0,v75:0,v95:0,v100:0,tp:0, thumb:'', children:{}};
 }
 function addRow(node, r){
@@ -674,7 +674,19 @@ function markVideoImpressions(node){
 function eng(n){ return n.rc+n.sh+n.cm+n.sv; }
 function primaryMetric(n){ return currentView==='alcance' ? n.rch : eng(n); }
 function sortedValues(obj){
-  return Object.values(obj).sort((a,b)=>primaryMetric(b)-primaryMetric(a));
+  const arr = Object.values(obj);
+  if(sortColumn){
+    arr.sort((a,b)=>{
+      const va = metricValue(a, sortColumn), vb = metricValue(b, sortColumn);
+      if(va==null && vb==null) return 0;
+      if(va==null) return 1;   // sem dado sempre por último, independente da direção
+      if(vb==null) return -1;
+      return sortDir==='desc' ? vb-va : va-vb;
+    });
+  } else {
+    arr.sort((a,b)=>primaryMetric(b)-primaryMetric(a));
+  }
+  return arr;
 }
 function statusDotHtml(s){
   const st = (s||'').toString().toUpperCase().trim();
@@ -687,11 +699,44 @@ function ctrTotal(n){ return n.imp>0 ? (n.cl/n.imp*100) : null; }
 function cpmOf(n){ return n.imp>0 ? n.sp/n.imp*1000 : null; }
 function cpeOf(n){ return eng(n)>0 ? n.sp/eng(n) : null; }
 function cpvOf(n){ return n.pv>0 ? n.sp/n.pv : null; }
+function vvOf(n, field){ return n.vidImp>0 ? (n[field]/n.vidImp*100) : null; }
+
+const TABLE_COLS = [
+  {key:'sp', lbl:'Invest.'}, {key:'imp', lbl:'Impr.'}, {key:'rch', lbl:'Alcance'},
+  {key:'ctr', lbl:'CTR Total'}, {key:'cpm', lbl:'CPM'}, {key:'eng', lbl:'Engaj.'}, {key:'cpe', lbl:'CPE'},
+  {key:'pv', lbl:'Visita Perfil'}, {key:'cpv', lbl:'CPV'},
+  {key:'vv25', lbl:'VV25%'}, {key:'vv50', lbl:'VV50%'}, {key:'vv100', lbl:'VV100%'},
+];
+function metricValue(n, col){
+  switch(col){
+    case 'sp': return n.sp; case 'imp': return n.imp; case 'rch': return n.rch;
+    case 'ctr': return ctrTotal(n); case 'cpm': return cpmOf(n); case 'eng': return eng(n); case 'cpe': return cpeOf(n);
+    case 'pv': return n.pv; case 'cpv': return cpvOf(n);
+    case 'vv25': return vvOf(n,'v25'); case 'vv50': return vvOf(n,'v50'); case 'vv100': return vvOf(n,'v100');
+    default: return null;
+  }
+}
+let sortColumn = null; // null = ordena pela métrica principal do toggle Alcance/Engajamento
+let sortDir = 'desc';
+function sortByColumn(col){
+  if(sortColumn===col){ sortDir = sortDir==='desc' ? 'asc' : 'desc'; }
+  else { sortColumn = col; sortDir = 'desc'; }
+  renderTree();
+}
+function renderTableHeader(){
+  const thead = document.getElementById('campTableHead');
+  const ths = TABLE_COLS.map(c=>{
+    const arrow = sortColumn===c.key ? (sortDir==='desc'?' ▼':' ▲') : '';
+    return `<th class="sortable" onclick="sortByColumn('${c.key}')">${c.lbl}${arrow}</th>`;
+  }).join('');
+  thead.innerHTML = `<tr><th>Campanha</th>${ths}<th></th></tr>`;
+}
 
 function rowCells(node){
   return `<td>${fD(node.sp)}</td><td>${fN(node.imp)}</td><td>${fN(node.rch)}</td>
     <td>${fP(ctrTotal(node))}</td><td>${fD(cpmOf(node))}</td><td>${fN(eng(node))}</td><td>${fD(cpeOf(node))}</td>
-    <td>${fN(node.pv)}</td><td>${fD(cpvOf(node))}</td>`;
+    <td>${fN(node.pv)}</td><td>${fD(cpvOf(node))}</td>
+    <td>${fP(vvOf(node,'v25'))}</td><td>${fP(vvOf(node,'v50'))}</td><td>${fP(vvOf(node,'v100'))}</td>`;
 }
 function funnelBtn(cKey, aKey, crKey){
   const args = [cKey, aKey||'', crKey||''].map(v=>`'${v}'`).join(',');
@@ -724,13 +769,14 @@ function creativeRowHtml(cr, cKey, aKey, crKey){
 }
 
 function renderTree(){
+  renderTableHeader();
   const rows = rawForPeriod();
   const tree = buildTree(rows);
   const camps = sortedValues(tree);
   const body = document.getElementById('treeBody');
   const foot = document.getElementById('treeFoot');
   if(!camps.length){
-    body.innerHTML = '<tr><td colspan="11" style="color:var(--muted);font-size:12px">Sem dados no período.</td></tr>';
+    body.innerHTML = '<tr><td colspan="14" style="color:var(--muted);font-size:12px">Sem dados no período.</td></tr>';
     foot.innerHTML = '';
     return;
   }
@@ -740,6 +786,7 @@ function renderTree(){
     const cKey = 'c'+ci;
     totals.sp+=camp.sp; totals.imp+=camp.imp; totals.rch+=camp.rch; totals.cl+=camp.cl; totals.pv+=camp.pv;
     totals.rc+=camp.rc; totals.sh+=camp.sh; totals.cm+=camp.cm; totals.sv+=camp.sv;
+    totals.v25+=camp.v25; totals.v50+=camp.v50; totals.v100+=camp.v100; totals.vidImp+=(camp.vidImp||0);
     html += campRowHtml(camp, cKey);
     if(openTree[cKey]){
       const adsets = sortedValues(camp.children);
